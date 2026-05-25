@@ -1,64 +1,83 @@
-<image src="https://user-images.githubusercontent.com/47839015/218900217-81f88955-67b8-4ed8-8e97-271de66c555e.png" align="right" style="margin-top:-2em;width:177px;margin-right:2em;display:inline-block;float:right;"></image>
+# QA RF Hub — Home Assistant Integration
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration) 
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=rstrouse&repository=espsomfy-rts-ha)
+This integration is a fork of [rstrouse/ESPSomfy-RTS-HA](https://github.com/rstrouse/ESPSomfy-RTS-HA) that adds support for the **QA RF Hub** firmware — an extension of ESPSomfy RTS that adds **open-protocol RF device** control (PT2262, EV1527, HT6P20B, Period-OOK, Dooya) alongside the original Somfy RTS shades.
 
+Use this integration if your ESP32 + CC1101 device runs the **QA RF Hub** firmware. It is fully backwards-compatible with the original ESPSomfy RTS firmware (RF device features simply won't appear if the firmware does not expose them).
 
-# ESPSomfy RTS-HA 
-Control up to 32 of your somfy shades in Home Assistant and set their position using an ESP32 and an inexpensive CC1101 tranceiver module.  You may also define up to 16 group shades that will allow you to move multiple covers at once.
+## Features
 
-# Requirements
-This integration requires hardware that uses an ESP32 microcontroller and a CC1101 transceiver.  Setup for this controller can be found at the [ESPSomfy RTS hardware repositiory](https://github.com/rstrouse/ESPSomfy-RTS).  You must have one of these inexpensive radios configured for your shades.
+### Somfy RTS shades (original ESPSomfy RTS functionality)
+- Up to 32 Somfy RTS shades + 16 groups
+- Two-way: position feedback even when controlled by a physical Telis remote
+- Full set of services (positioning, tilting, sun/wind sensor flags, raw commands)
+- Firmware updates via the HA `update` entity
 
-# Installation
-The easiest way to get going is to install this integration in Home Assistant using HACS as a [Custom Repository](https://hacs.xyz/docs/faq/custom_repositories/).  In the custom repository url use the following url `https://github.com/rstrouse/ESPSomfy-RTS-HA`.  
+### QA RF Hub — Open-protocol RF devices (new)
+- Up to 16 fixed-code RF devices learned from physical remotes
+- Supported protocols: **PT2262**, **EV1527**, **HT6P20B**, **Period-OOK** (generic OOK), **Dooya**
+- Each device has up to 3 codes (OPEN / STOP / CLOSE) → exposed as a HA `cover` entity
+- State updates via WebSocket (`rfState` event)
+- Optimistic UI: HA shows the command immediately while waiting for firmware confirmation
 
-As an alternative you may install it manually by copying the contents of the `custom_components` folder to the `config/custom_components` directory of your Home Assistant installation.
+## Requirements
+
+ESP32 board (DevKitC-1 N16R8 recommended) + CC1101 433 MHz transceiver running the **QA RF Hub** firmware. The original ESPSomfy RTS firmware also works, but only the Somfy RTS features will be available.
+
+## Installation
+
+### HACS (recommended)
+1. Open HACS → 3-dot menu → **Custom repositories**
+2. Add `https://github.com/qa-automacao/QARFHub-HA` (category: Integration)
+3. Install **QA RF Hub (ESPSomfy RTS + Open RF)**
+4. Restart Home Assistant
+
+### Manual
+Copy `custom_components/espsomfy_rts` into `config/custom_components/` and restart HA.
 
 ## Setup
-Once installed, ESPSomfy-RTS-HA will automatically detect any radio devices on your local network. Just browse to Home Assistant's Settings &rarr; Devices & Services and your ESPSomfy-RTS device will show up as available to configure.
 
-# Updates
-After you have installed the plugin, you will be notified when there is a new version of the plugin available.  As of v2.2.1 of the ESPSomfy RTS firmware you can also update your devices remotely using the update entity included in the plugin.  It will notify you when there is a new version to install.
+After installation, the QA RF Hub is auto-discovered via SSDP / Zeroconf on your local network. Go to **Settings → Devices & Services** and add the integration.
 
-# Functionality
-Once configured you will be able to open, close, and set the position of your shades using home assistant.  The integration will monitor the position of the shade regardless of how it was opened or closed.  This includes opening or closing it using a Telis remote.  Shades can be added to your dashboards and automated with Home Assistant services through automations.
+If auto-discovery fails, add manually by providing the device IP.
 
-![image](https://user-images.githubusercontent.com/47839015/213933858-95042e9e-0874-4e58-8123-87146439a20e.png)
+## Updates
 
-# Services
-There are a number of automation services available.  You can find these in the [Services](https://github.com/rstrouse/ESPSomfy-RTS-HA/wiki/Services) wiki.
+Firmware updates are managed via the included `update` entity. Home Assistant will notify you when a new firmware version is published in the GitHub release feed.
 
-# Events
-The integration emits events on the Home Assistant event bus for all commands whether they have originated in Home Assistant, a remote control, or the ESPSomfy RTS web interface.  These events can be captured using the `espsomfy-rts_event` type.
+## Functionality
 
-The data payload for the event includes:
-* `entity_id`: The entitiy id in home assistant for the target cover
-* `event_key`: The event that triggered this event (for now this is always shadeCommand)
-* `name`: The name assigned to the entity
-* `source`: The originator of the command.  This will be one of the following
-  * `remote`: The user pressed a button on a remote
-  * `internal`: The command originated from ESPSomfy RTS
-  * `group`: The command was part of a group command
-* `remote_address`: The address defined for the ESPSomfy RTS motor
-* `source_address`: The address of the source device.  If this is a remote it will be the address of the remote channel.  If it is part of a group request it will be the address of the group.
-* `command`: This will be one of the following commands
-  * `Up` - An up command was issued
-  * `Down` - A down command was issued
-  * `My` - A my/stop command was issued
-  * `StepUp` - A step up command was issued
-  * `StepDown` - A step down command was issued
-  * `Prog` - The prog button was pressed
-  * `My+Up` - A combination of the my and up button was pressed at the same time
-  * `My+Down` - A combination of the my and down button was pressed at the same time
-  * `Up+Down` - The up and down buttons were pressed at the same time
-  * `My+Up+Down` - The my, up, and down buttons were all pressed at the same time
-  
+### Somfy RTS shades
+Open, close, set position (0-100%), tilt control. The integration tracks the shade position regardless of whether the command came from HA, the web UI, or a Telis remote. Add shades to dashboards and create automations as with any cover entity.
 
-![image](https://github.com/rstrouse/ESPSomfy-RTS-HA/assets/47839015/2fbf4ad8-86b4-4d4e-ac8e-ce04ba4adeeb)
+### RF devices (open protocol)
+Each learned RF device appears as a HA `cover` entity with **Open / Stop / Close** controls. Because the underlying protocols are one-way (no feedback from the motor), the state is **logical** — it reflects the last command sent, not the actual motor position.
 
+Two-code devices (OPEN + CLOSE only, no STOP) are also supported — the STOP button simply has no effect.
 
+## Services
 
+Same services as the original ESPSomfy RTS integration. See [Services wiki](https://github.com/rstrouse/ESPSomfy-RTS-HA/wiki/Services). RF devices respond to standard HA cover services (`cover.open_cover`, `cover.close_cover`, `cover.stop_cover`).
 
+## Events
 
+The integration emits events on the HA event bus for all Somfy RTS commands using event type `espsomfy-rts_event`. Payload:
+
+* `entity_id`, `event_key`, `name`
+* `source`: `remote` / `internal` / `group`
+* `remote_address`, `source_address`
+* `command`: `Up` / `Down` / `My` / `StepUp` / `StepDown` / `Prog` / `My+Up` / `My+Down` / `Up+Down` / `My+Up+Down`
+
+RF devices currently do not emit events (they have no rolling code or remote identification).
+
+## Hardware
+
+- **Firmware**: [QA RF Hub firmware](https://github.com/qa-automacao/QARFHub) (or original [ESPSomfy RTS](https://github.com/rstrouse/ESPSomfy-RTS))
+- **Board**: ESP32-S3 DevKitC-1 N16R8 (16 MB flash, 8 MB PSRAM)
+- **Radio**: CC1101 module at 433 MHz, connected via SPI (SCK=12, MOSI=11, MISO=13, CSN=10, GDO0/TX=8, GDO2/RX=18)
+
+## Credits
+
+- Original ESPSomfy RTS firmware and HA integration: [@rstrouse](https://github.com/rstrouse)
+- QA RF Hub firmware fork and open-protocol RF additions: QA Automação

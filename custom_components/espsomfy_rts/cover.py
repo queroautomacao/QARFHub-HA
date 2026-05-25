@@ -27,6 +27,8 @@ from homeassistant.util import dt as dt_util
 from .const import (
     DOMAIN,
     EVT_CONNECTED,
+    EVT_RFDEVICES,
+    EVT_RFSTATE,
     EVT_SHADECOMMAND,
     EVT_SHADEREMOVED,
     EVT_SHADESTATE,
@@ -138,6 +140,16 @@ async def async_setup_entry(
                 )
         if new_groups:
             async_add_entities(new_groups)
+
+        # QA RF Hub — create cover entities for open-protocol RF devices.
+        # A device with 3 codes (open/stop/close) becomes a cover; with 2 codes
+        # we still expose it as a cover but only OPEN/CLOSE.
+        new_rf_devices = []
+        for rf_dev in controller.api.rf_devices:
+            with contextlib.suppress(KeyError):
+                new_rf_devices.append(ESPSomfyRFDevice(controller, rf_dev))
+        if new_rf_devices:
+            async_add_entities(new_rf_devices)
 
         platform = ep.async_get_current_platform()
         platform.async_register_entity_service(
@@ -879,3 +891,144 @@ class ESPSomfyShade(ESPSomfyEntity, CoverEntity):
         if ATTR_REPEAT in kwargs:
             cmd[ATTR_REPEAT] = kwargs[ATTR_REPEAT]
         await self._controller.api.shade_command(cmd)
+
+
+# ============================================================
+# QA RF Hub — Open-protocol RF device cover entity
+# ============================================================
+# RF devices are fixed-code remotes (PT2262/EV1527/HT6P20B/Period-OOK/Dooya)
+# learned from a physical remote. They are NOT Somfy RTS — they do not have
+# rolling codes or position feedback. The firmware tracks only ON/OFF/STOP
+# logical state and broadcasts changes via the `rfState` WebSocket event.
+#
+# State mapping (firmware → HA cover):
+#   state=0 OFF/CLOSE  -> is_closed = True   (cover closed)
+#   state=1 ON/OPEN    -> is_closed = False  (cover open)
+#   state=2 STOP       -> is_closed = None   (intermediate/unknown)
+#
+# Commands sent via HTTP POST /rfsend?id=X&cmd=open|close|stop|toggle
+class ESPSomfyRFDevice(ESPSomfyEntity, CoverEntity):
+    """A QA RF Hub open-protocol RF device, exposed as a HA cover.
+
+    These are learned fixed-code RF remotes (curtain motors, garage gates,
+    blinds) controlled via the CC1101 radio at 433 MHz. They do NOT support
+    position feedback — only OPEN / STOP / CLOSE commands.
+    """
+
+    def __init__(self, controller: ESPSomfyController, data) -> None:
+        """Initialize an RF device cover entity."""
+        super().__init__(controller=controller, data=data)
+        self._controller = controller
+        self._device_id = data["id"]
+        self._attr_unique_id = f"{controller.unique_id}_rf{self._device_id}"
+        self._attr_name = data.get("name") or f"RF Device {self._device_id}"
+        # Initial state from discovery payload (state field from firmware)
+        self._state = int(data.get("state", 0))
+        self._enabled = bool(data.get("enabled", True))
+        self._attr_available = self._enabled
+        self._attr_device_class = CoverDeviceClass.CURTAIN
+        self._attr_supported_features = (
+            CoverEntityFeature.OPEN
+            | CoverEntityFeature.CLOSE
+            | CoverEntityFeature.STOP
+        )
+
+    @property
+    def available(self) -> bool:
+        """Return whether the RF device is available."""
+        return self._attr_available
+
+    @property
+    def should_poll(self) -> bool:
+        """RF devices are push-only via WebSocket."""
+        return False
+
+    @property
+    def is_closed(self) -> bool | None:
+        """Closed when state == 0 (OFF/CLOSE), open when state == 1.
+
+        STOP (state == 2) is intermediate — return None so HA shows 'unknown'
+        position rather than forcing closed/open.
+        """
+        if self._state == 0:
+            return True
+        if self._state == 1:
+            return False
+        return None
+
+    @property
+    def is_opening(self) -> bool:
+        """RF devices don't report motion direction — always False."""
+        return False
+
+    @property
+    def is_closing(self) -> bool:
+        """RF devices don't report motion direction — always False."""
+        return False
+
+    @property
+    def icon(self) -> str | None:
+        """Use a generic remote/curtain icon."""
+        return "mdi:blinds-horizontal"
+
+    def _handle_coordinator_update(self) -> None:
+        """Handle updates pushed via WebSocket."""
+        if self.registry_entry.disabled:
+            return
+        data = self._controller.data
+        evt = data.get("event", "") if isinstance(data, dict) else ""
+
+        # Connection state
+        if evt == EVT_CONNECTED:
+            if "connected" in data and self._attr_available != bool(data["connected"]):
+                self._attr_available = bool(data["connected"]) and self._enabled
+                self.async_write_ha_state()
+            return
+
+        # Single RF device state update: {event:'rfState', id, name, state}
+        if evt == EVT_RFSTATE and data.get("id") == self._device_id:
+            new_state = int(data.get("state", self._state))
+            if new_state != self._state:
+                self._state = new_state
+                self.async_write_ha_state()
+            return
+
+        # Bulk RF devices list update — sync our state from it.
+        if evt == EVT_RFDEVICES and isinstance(data.get("data"), list):
+            for entry in data["data"]:
+                if entry.get("id") == self._device_id:
+                    new_state = int(entry.get("state", self._state))
+                    new_enabled = bool(entry.get("enabled", self._enabled))
+                    changed = False
+                    if new_state != self._state:
+                        self._state = new_state
+                        changed = True
+                    if new_enabled != self._enabled:
+                        self._enabled = new_enabled
+                        self._attr_available = self._enabled
+                        changed = True
+                    if changed:
+                        self.async_write_ha_state()
+                    break
+
+    async def async_open_cover(self, **kwargs: Any) -> None:
+        """Send the OPEN command via RF."""
+        await self._controller.api.open_rf_device(self._device_id)
+        # Optimistic update — firmware will confirm via rfState event
+        if self._state != 1:
+            self._state = 1
+            self.async_write_ha_state()
+
+    async def async_close_cover(self, **kwargs: Any) -> None:
+        """Send the CLOSE command via RF."""
+        await self._controller.api.close_rf_device(self._device_id)
+        if self._state != 0:
+            self._state = 0
+            self.async_write_ha_state()
+
+    async def async_stop_cover(self, **kwargs: Any) -> None:
+        """Send the STOP command via RF."""
+        await self._controller.api.stop_rf_device(self._device_id)
+        if self._state != 2:
+            self._state = 2
+            self.async_write_ha_state()

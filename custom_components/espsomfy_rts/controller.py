@@ -34,6 +34,8 @@ from .const import (
     API_GROUPCOMMAND,
     API_GROUPS,
     API_LOGIN,
+    API_RFDEVICES,
+    API_RFSEND,
     API_SETPOSITIONS,
     API_SETSENSOR,
     API_SHADECOMMAND,
@@ -45,6 +47,9 @@ from .const import (
     EVT_FWSTATUS,
     EVT_GROUPSTATE,
     EVT_MEMSTATUS,
+    EVT_RFDEVICES,
+    EVT_RFLEARNING,
+    EVT_RFSTATE,
     EVT_SHADEADDED,
     EVT_SHADECOMMAND,
     EVT_SHADEREMOVED,
@@ -295,6 +300,10 @@ class ESPSomfyController(DataUpdateCoordinator):
                 EVT_WIFISTRENGTH,
                 EVT_ETHERNET,
                 EVT_MEMSTATUS,
+                # QA RF Hub — RF device events
+                EVT_RFSTATE,
+                EVT_RFDEVICES,
+                EVT_RFLEARNING,
             ]
         )
         await self.ws_listener.connect()
@@ -476,6 +485,13 @@ class ESPSomfyAPI:
         """Return the state groups."""
         if "groups" in self._config:
             return self._config["groups"]
+        return []
+
+    @property
+    def rf_devices(self) -> Any:
+        """Return the configured RF devices (QA RF Hub open-protocol covers)."""
+        if "rfDevices" in self._config:
+            return self._config["rfDevices"]
         return []
 
     @property
@@ -697,6 +713,12 @@ class ESPSomfyAPI:
             self._config["groups"] = data["groups"]
         elif "groups" not in self._config:
             self._config["groups"] = []
+        # QA RF Hub may include rfDevices in discovery (future firmware) — accept it,
+        # otherwise we'll fetch it separately via load_rf_devices().
+        if "rfDevices" in data:
+            self._config["rfDevices"] = data["rfDevices"]
+        elif "rfDevices" not in self._config:
+            self._config["rfDevices"] = []
         if "hostname" in data:
             self._config["hostname"] = data["hostname"]
             self._deviceName = data["hostname"]
@@ -744,6 +766,65 @@ class ESPSomfyAPI:
                 self._config["groups"] = await resp.json()
                 return self._config["groups"]
             _LOGGER.error(await resp.text())
+
+    async def load_rf_devices(self) -> Any | None:
+        """Load all RF devices from the QA RF Hub.
+
+        The RF endpoints are served on the web server (port 80), not the
+        api server (port 8081). Old ESPSomfy-RTS firmware does not have
+        these endpoints — missing endpoint is OK (returns empty list).
+        """
+        url = f"{self._config_url}{API_RFDEVICES}"
+        try:
+            async with self._session.get(url, headers=self._headers) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    if isinstance(data, list):
+                        self._config["rfDevices"] = data
+                        return data
+                # 404 means we're talking to original ESPSomfy-RTS firmware
+                # (no RF device support) — treat as empty list.
+                self._config["rfDevices"] = []
+                return []
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            _LOGGER.debug("RF devices endpoint unavailable: %s", e)
+            self._config["rfDevices"] = []
+            return []
+
+    async def rf_send_command(self, device_id: int, cmd: str) -> bool:
+        """Send a command to an RF device (open/close/stop/toggle).
+
+        Uses the /rfsend endpoint on the web server (port 80). Accepts
+        cmd values: "open" (alias "on"), "close" (alias "off"), "stop", "toggle".
+        """
+        url = f"{self._config_url}{API_RFSEND}?id={int(device_id)}&cmd={cmd}"
+        try:
+            async with self._session.post(url, headers=self._headers) as resp:
+                if resp.status == 200:
+                    return True
+                _LOGGER.error(
+                    "RF send failed (id=%s cmd=%s): HTTP %d - %s",
+                    device_id, cmd, resp.status, await resp.text()
+                )
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            _LOGGER.error("RF send error: %s", e)
+        return False
+
+    async def open_rf_device(self, device_id: int) -> bool:
+        """Send the OPEN command to an RF device."""
+        return await self.rf_send_command(device_id, "open")
+
+    async def close_rf_device(self, device_id: int) -> bool:
+        """Send the CLOSE command to an RF device."""
+        return await self.rf_send_command(device_id, "close")
+
+    async def stop_rf_device(self, device_id: int) -> bool:
+        """Send the STOP command to an RF device."""
+        return await self.rf_send_command(device_id, "stop")
+
+    async def toggle_rf_device(self, device_id: int) -> bool:
+        """Send the TOGGLE command to an RF device (for 2-code switches)."""
+        return await self.rf_send_command(device_id, "toggle")
 
     async def tilt_open(self, shade_id: int):
         """Send the command to open the tilt."""
@@ -891,18 +972,22 @@ class ESPSomfyAPI:
                 _LOGGER.error(await resp.text())
 
     async def get_initial(self):
-        """Get the initial config from ESPSomfy RTS."""
+        """Get the initial config from ESPSomfy RTS / QA RF Hub."""
         try:
             self._session = aiohttp_client.async_get_clientsession(self.hass)
             async with self._session.get(f"{self._api_url}{API_DISCOVERY}") as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     self.apply_data(data)
+                    # QA RF Hub — fetch RF devices from /rfdevices if not already
+                    # in the discovery payload (legacy firmwares).
+                    if not self._config.get("rfDevices"):
+                        await self.load_rf_devices()
                     entry = self.hass.config_entries.async_get_entry(
                         self._config_entry_id
                     )
                     if not self._configured:
-                        _LOGGER.debug("ESPSomfy RTS Setting up entities")
+                        _LOGGER.debug("ESPSomfy RTS / QA RF Hub setting up entities")
                         await self.hass.config_entries.async_forward_entry_setups(
                             entry, PLATFORMS
                         )
