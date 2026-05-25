@@ -1,83 +1,97 @@
+<p align="center">
+  <img src="logo.png" alt="Quero Automação — QA RF Hub" width="300">
+</p>
+
 # QA RF Hub — Home Assistant Integration
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
 
-This integration is a fork of [rstrouse/ESPSomfy-RTS-HA](https://github.com/rstrouse/ESPSomfy-RTS-HA) that adds support for the **QA RF Hub** firmware — an extension of ESPSomfy RTS that adds **open-protocol RF device** control (PT2262, EV1527, HT6P20B, Period-OOK, Dooya) alongside the original Somfy RTS shades.
+Integração oficial do **QA RF Hub** para Home Assistant — controle de cortinas Somfy RTS e cortinas RF (433 MHz, protocolos abertos) a partir do mesmo gateway ESP32.
 
-Use this integration if your ESP32 + CC1101 device runs the **QA RF Hub** firmware. It is fully backwards-compatible with the original ESPSomfy RTS firmware (RF device features simply won't appear if the firmware does not expose them).
+Esta integração é um fork da excelente [ESPSomfy-RTS-HA](https://github.com/rstrouse/ESPSomfy-RTS-HA) (de [@rstrouse](https://github.com/rstrouse)) que adiciona suporte aos **dispositivos RF de protocolo aberto** (PT2262, EV1527, HT6P20B, OOK genérico, Dooya) aprendidos pelo firmware QA RF Hub.
 
-## Features
+## Recursos
 
-### Somfy RTS shades (original ESPSomfy RTS functionality)
-- Up to 32 Somfy RTS shades + 16 groups
-- Two-way: position feedback even when controlled by a physical Telis remote
-- Full set of services (positioning, tilting, sun/wind sensor flags, raw commands)
-- Firmware updates via the HA `update` entity
+### Cortinas Somfy RTS (funcionalidade original)
+- Até 32 cortinas Somfy RTS + 16 grupos
+- Two-way: posição é mantida mesmo quando controlada por controle físico Telis
+- Todos os serviços (posição, tilt, sun/wind flags, comandos raw)
+- Atualização de firmware pelo entity `update` do HA
 
-### QA RF Hub — Open-protocol RF devices (new)
-- Up to 16 fixed-code RF devices learned from physical remotes
-- Supported protocols: **PT2262**, **EV1527**, **HT6P20B**, **Period-OOK** (generic OOK), **Dooya**
-- Each device has up to 3 codes (OPEN / STOP / CLOSE) → exposed as a HA `cover` entity
-- State updates via WebSocket (`rfState` event)
-- Optimistic UI: HA shows the command immediately while waiting for firmware confirmation
+### Dispositivos RF abertos *(novo no QA RF Hub)*
+- Até 16 dispositivos RF de código fixo aprendidos de controles físicos
+- Protocolos: **PT2262**, **EV1527**, **HT6P20B**, **OOK genérico (Period-OOK)**, **Dooya**
+- Cada dispositivo tem até 3 códigos (Abrir / Parar / Fechar) → exposto como entity `cover` no HA
+- Atualizações de estado via WebSocket (evento `rfState`)
+- UI otimista: HA reflete o comando imediatamente enquanto aguarda confirmação do firmware
 
-## Requirements
+## Requisitos
 
-ESP32 board (DevKitC-1 N16R8 recommended) + CC1101 433 MHz transceiver running the **QA RF Hub** firmware. The original ESPSomfy RTS firmware also works, but only the Somfy RTS features will be available.
+Placa ESP32-S3 DevKitC-1 N16R8 + transceptor CC1101 433 MHz, rodando o **firmware QA RF Hub**.
 
-## Installation
+Funciona também com o firmware **ESPSomfy-RTS original** — neste caso, apenas as cortinas RTS aparecem (os endpoints de RF aberto retornam vazios, sem criar entities).
 
-### HACS (recommended)
-1. Open HACS → 3-dot menu → **Custom repositories**
-2. Add `https://github.com/qa-automacao/QARFHub-HA` (category: Integration)
-3. Install **QA RF Hub (ESPSomfy RTS + Open RF)**
-4. Restart Home Assistant
+## Instalação
+
+### Via HACS (recomendado)
+1. HACS → menu de 3 pontos → **Repositórios customizados**
+2. Adicione `https://github.com/queroautomacao/QARFHub-HA` (categoria: *Integration*)
+3. Instale **QA RF Hub**
+4. Reinicie o Home Assistant
 
 ### Manual
-Copy `custom_components/espsomfy_rts` into `config/custom_components/` and restart HA.
+Copie `custom_components/qarfhub` para `config/custom_components/` e reinicie o HA.
 
-## Setup
+## Configuração
 
-After installation, the QA RF Hub is auto-discovered via SSDP / Zeroconf on your local network. Go to **Settings → Devices & Services** and add the integration.
+Após instalação, o QA RF Hub é auto-detectado via SSDP / Zeroconf na rede local. Vá em **Configurações → Dispositivos & Serviços** e adicione a integração.
 
-If auto-discovery fails, add manually by providing the device IP.
+Se a auto-detecção falhar, adicione manualmente fornecendo o IP da placa.
 
-## Updates
+## Atualização de firmware
 
-Firmware updates are managed via the included `update` entity. Home Assistant will notify you when a new firmware version is published in the GitHub release feed.
+Atualizações são gerenciadas pelo entity `update` que aparece no HA. O HA notifica quando há nova versão publicada no feed de releases do GitHub.
 
-## Functionality
+## Funcionalidade
 
-### Somfy RTS shades
-Open, close, set position (0-100%), tilt control. The integration tracks the shade position regardless of whether the command came from HA, the web UI, or a Telis remote. Add shades to dashboards and create automations as with any cover entity.
+### Cortinas Somfy RTS
+Abrir, fechar, posicionar (0–100%), controle de tilt. A integração rastreia a posição independentemente da fonte do comando (HA, WebUI da placa, controle Telis). Adicione aos dashboards e crie automações como em qualquer entity `cover`.
 
-### RF devices (open protocol)
-Each learned RF device appears as a HA `cover` entity with **Open / Stop / Close** controls. Because the underlying protocols are one-way (no feedback from the motor), the state is **logical** — it reflects the last command sent, not the actual motor position.
+### Dispositivos RF abertos
+Cada dispositivo RF aprendido aparece como um `cover` com **Abrir / Parar / Fechar**. Como o protocolo é unidirecional (sem feedback do motor), o estado é **lógico** — reflete o último comando enviado, não a posição real do motor.
 
-Two-code devices (OPEN + CLOSE only, no STOP) are also supported — the STOP button simply has no effect.
+Dispositivos com 2 códigos (apenas Abrir + Fechar, sem Parar) também são suportados — o botão Parar simplesmente não tem efeito.
 
-## Services
+## Eventos
 
-Same services as the original ESPSomfy RTS integration. See [Services wiki](https://github.com/rstrouse/ESPSomfy-RTS-HA/wiki/Services). RF devices respond to standard HA cover services (`cover.open_cover`, `cover.close_cover`, `cover.stop_cover`).
-
-## Events
-
-The integration emits events on the HA event bus for all Somfy RTS commands using event type `espsomfy-rts_event`. Payload:
+A integração emite eventos no event bus do HA para todos os comandos Somfy RTS, com tipo `qarfhub_event`. Payload:
 
 * `entity_id`, `event_key`, `name`
 * `source`: `remote` / `internal` / `group`
 * `remote_address`, `source_address`
 * `command`: `Up` / `Down` / `My` / `StepUp` / `StepDown` / `Prog` / `My+Up` / `My+Down` / `Up+Down` / `My+Up+Down`
 
-RF devices currently do not emit events (they have no rolling code or remote identification).
+Dispositivos RF não emitem eventos (não há rolling code ou identificação de remote).
 
 ## Hardware
 
-- **Firmware**: [QA RF Hub firmware](https://github.com/qa-automacao/QARFHub) (or original [ESPSomfy RTS](https://github.com/rstrouse/ESPSomfy-RTS))
-- **Board**: ESP32-S3 DevKitC-1 N16R8 (16 MB flash, 8 MB PSRAM)
-- **Radio**: CC1101 module at 433 MHz, connected via SPI (SCK=12, MOSI=11, MISO=13, CSN=10, GDO0/TX=8, GDO2/RX=18)
+- **Firmware**: [QA RF Hub](https://github.com/queroautomacao/QARFHub) (ou [ESPSomfy-RTS original](https://github.com/rstrouse/ESPSomfy-RTS))
+- **Placa**: ESP32-S3 DevKitC-1 N16R8 (16 MB flash, 8 MB PSRAM)
+- **Rádio**: módulo CC1101 433 MHz via SPI (SCK=12, MOSI=11, MISO=13, CSN=10, GDO0/TX=8, GDO2/RX=18)
 
-## Credits
+## Créditos
 
-- Original ESPSomfy RTS firmware and HA integration: [@rstrouse](https://github.com/rstrouse)
-- QA RF Hub firmware fork and open-protocol RF additions: QA Automação
+- Firmware ESPSomfy-RTS original e integração HA: [@rstrouse](https://github.com/rstrouse)
+- Fork QA RF Hub (firmware + adições RF protocolo aberto): **Quero Automação**
+
+## Para o ícone aparecer oficialmente no HA
+
+A pasta `brands/` contém os arquivos prontos para um PR em [home-assistant/brands](https://github.com/home-assistant/brands) — uma vez aceito, o logo da Quero Automação aparece automaticamente em **Configurações → Dispositivos & Serviços** para todos os usuários, sem precisar de instalação local. Submissão:
+
+```
+brands/custom_integrations/qarfhub/
+├── icon.png       (256x256)
+├── icon@2x.png    (512x512)
+├── logo.png       (250x90)
+└── logo@2x.png    (500x180)
+```

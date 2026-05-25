@@ -16,33 +16,33 @@
     "step": {
       "confirm": {
         "data": {
-          "host": "Dirección de Host para el dispositivo ESPSomfy RTS",
+          "host": "Dirección de Host para el dispositivo QA RF Hub",
           "username": "Usuario",
           "password": "Password",
           "pin": "Pin"
         },
-        "title": "Configura ESPSomfy RTS",
+        "title": "Configura QA RF Hub",
         "description": "Proporciona las opciones de seguridad configuradas para tu dispositivo"
       },
       "user": {
         "data": {
-          "host": "Dirección de Host para el dispositivo ESPSomfy RTS",
+          "host": "Dirección de Host para el dispositivo QA RF Hub",
           "username": "Usuario",
           "password": "Password",
           "pin": "Pin"
         },
         "description": "Proporciona las opciones de seguridad configuradas para tu dispositivo",
-        "title": "Configura ESPSomfy RTS"
+        "title": "Configura QA RF Hub"
       },
       "zeroconf_confirm": {
         "data": {
-          "host": "Dirección de Host para el dispositivo ESPSomfy RTS",
+          "host": "Dirección de Host para el dispositivo QA RF Hub",
           "username": "Usuario",
           "password": "Password",
           "pin": "Pin"
         },
         "description": "Quieres añadir {model} con la id del servidor {server_id} a Home Assistant?",
-        "title": "ESPSomfy RTS Descubierto"
+        "title": "QA RF Hub Descubierto"
       }
     }
   },
@@ -59,12 +59,12 @@
     "step": {
       "init": {
         "data": {
-          "host": "Dirección de Host para el dispositivo ESPSomfy RTS",
+          "host": "Dirección de Host para el dispositivo QA RF Hub",
           "username": "Usuario",
           "password": "Password",
           "pin": "Pin"
         },
-        "title": "Configura ESPSomfy RTS",
+        "title": "Configura QA RF Hub",
         "description": "Proporciona las opciones de seguridad configuradas para tu dispositivo"
       }
     }

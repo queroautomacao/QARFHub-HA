@@ -39,7 +39,7 @@ class ESPSomfyRTSUpdateEntity(ESPSomfyEntity, UpdateEntity):
         | UpdateEntityFeature.INSTALL
         | UpdateEntityFeature.PROGRESS
     )
-    _attr_title = "ESPSomfy RTS Firmware"
+    _attr_title = "QA RF Hub Firmware"
 
     def __init__(self, controller: ESPSomfyController) -> None:
         """Initialize the update entity."""

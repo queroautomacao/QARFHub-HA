@@ -552,7 +552,7 @@ class ESPSomfyShade(ESPSomfyEntity, CoverEntity):
             "command": self._state_attributes.get("last_cmd", ""),
             "timestamp": self._state_attributes.get("cmd_fired"),
         }
-        self.hass.bus.async_fire("espsomfy-rts_event", bus_data)
+        self.hass.bus.async_fire("qarfhub_event", bus_data)
         if upd:
             self.async_write_ha_state()
 
@@ -600,7 +600,7 @@ class ESPSomfyShade(ESPSomfyEntity, CoverEntity):
                     "command": self._state_attributes.get("last_cmd", ""),
                     "timestamp": self._state_attributes.get("cmd_fired"),
                 }
-                self.hass.bus.async_fire("espsomfy-rts_event", bus_data)
+                self.hass.bus.async_fire("qarfhub_event", bus_data)
             self.async_write_ha_state()
 
     @property

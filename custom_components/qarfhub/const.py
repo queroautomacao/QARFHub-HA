@@ -12,8 +12,8 @@ on port 8080 broadcasts events for both shade and RF device state changes.
 from homeassistant.const import Platform
 
 VERSION = "v2.5.0"
-DOMAIN = "espsomfy_rts"
-MANUFACTURER = "QA Automação"
+DOMAIN = "qarfhub"
+MANUFACTURER = "Quero Automação"
 API_CONTROLLER = "/controller"
 API_SHADES = "/shades"
 API_GROUPS = "/groups"

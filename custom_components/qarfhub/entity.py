@@ -30,7 +30,7 @@ class ESPSomfyEntity(CoordinatorEntity[ESPSomfyController], Entity):
             identifiers={(DOMAIN, self.controller.unique_id)},
             name=self.controller.device_name,
             manufacturer=MANUFACTURER,
-            model=f"ESPSomfy RTS Integration {VERSION}",
+            model=f"QA RF Hub {VERSION}",
             sw_version=self.controller.version,
             hw_version=None,
         )

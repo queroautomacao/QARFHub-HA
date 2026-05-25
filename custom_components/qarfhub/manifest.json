@@ -1,14 +1,14 @@
 {
-  "domain": "espsomfy_rts",
-  "name": "QA RF Hub (ESPSomfy RTS + Open RF)",
-  "codeowners": ["@rstrouse"],
+  "domain": "qarfhub",
+  "name": "QA RF Hub",
+  "codeowners": ["@queroautomacao"],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/rstrouse/ESPSomfy-RTS/wiki/Configuring-the-Software",
+  "documentation": "https://github.com/queroautomacao/QARFHub-HA",
   "homekit": {},
   "integration_type": "hub",
   "iot_class": "local_push",
-  "issue_tracker": "https://github.com/rstrouse/ESPSomfy-RTS/issues",
+  "issue_tracker": "https://github.com/queroautomacao/QARFHub-HA/issues",
   "requirements": ["websocket-client==1.8.0", "aiofiles"],
   "ssdp": [
     {
