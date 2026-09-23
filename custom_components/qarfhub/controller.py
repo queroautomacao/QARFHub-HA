@@ -17,7 +17,7 @@ from packaging.version import parse as version_parse
 import websocket
 
 from homeassistant.components.cover import CoverDeviceClass, CoverEntityFeature
-from homeassistant.const import CONF_HOST, CONF_PIN, CONF_USERNAME, Platform
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PIN, CONF_USERNAME, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import (
@@ -753,7 +753,7 @@ class ESPSomfyAPI:
 
     async def load_shades(self) -> Any | None:
         """Load all the shades from the controller."""
-        async with self._session.get(f"{self._api_url}{API_SHADES}") as resp:
+        async with self._session.get(f"{self._api_url}{API_SHADES}", headers=self._headers) as resp:
             if resp.status == 200:
                 self._config["shades"] = await resp.json()
                 return self._config["shades"]
@@ -761,7 +761,7 @@ class ESPSomfyAPI:
 
     async def load_groups(self) -> Any | None:
         """Load all the groups from the controller."""
-        async with self._session.get(f"{self._api_url}{API_GROUPS}") as resp:
+        async with self._session.get(f"{self._api_url}{API_GROUPS}", headers=self._headers) as resp:
             if resp.status == 200:
                 self._config["groups"] = await resp.json()
                 return self._config["groups"]
@@ -920,11 +920,26 @@ class ESPSomfyAPI:
 
     async def put_command(self, command, data):
         """Send a put command to the device."""
-        async with self._session.put(f"{self._api_url}{command}", json=data) as resp:
+        async with self._session.put(f"{self._api_url}{command}", json=data, headers=self._headers) as resp:
             if resp.status == 200:
                 pass
             else:
                 _LOGGER.error(await resp.text())
+
+    async def _runtime_login(self):
+        """Log in with the credentials saved in the config entry, when the Hub asks for them."""
+        if not self._canLogin or self._config.get("authType", 0) == 0:
+            return
+        try:
+            await self.login(
+                {
+                    "username": self.data.get(CONF_USERNAME, ""),
+                    "password": self.data.get(CONF_PASSWORD, ""),
+                    "pin": self.data.get(CONF_PIN, ""),
+                }
+            )
+        except LoginError as err:
+            _LOGGER.error("QA RF Hub: login recusado (%s). Confira o PIN/senha da integracao.", err)
 
     async def login(self, data):
         """Log in to the EPSSomfy hardware device."""
@@ -954,7 +969,7 @@ class ESPSomfyAPI:
     async def group_command(self, data):
         """Send commands to ESPSomfyRTS via PUT request."""
         async with self._session.put(
-            f"{self._api_url}{API_GROUPCOMMAND}", json=data
+            f"{self._api_url}{API_GROUPCOMMAND}", json=data, headers=self._headers
         ) as resp:
             if resp.status == 200:
                 pass
@@ -964,7 +979,7 @@ class ESPSomfyAPI:
     async def tilt_command(self, data):
         """Send tilt commands to ESPSomfyRTS via PUT request."""
         async with self._session.put(
-            f"{self._api_url}{API_TILTCOMMAND}", json=data
+            f"{self._api_url}{API_TILTCOMMAND}", json=data, headers=self._headers
         ) as resp:
             if resp.status == 200:
                 pass
@@ -979,6 +994,10 @@ class ESPSomfyAPI:
                 if resp.status == 200:
                     data = await resp.json()
                     self.apply_data(data)
+                    # 2.5.1 — com PIN/senha configurado no Hub (firmware v3.1.75+),
+                    # todo pedido precisa do apikey. O login so acontecia no
+                    # config_flow; em execucao o header ia vazio e o Hub responde 401.
+                    await self._runtime_login()
                     # QA RF Hub — fetch RF devices from /rfdevices if not already
                     # in the discovery payload (legacy firmwares).
                     if not self._config.get("rfDevices"):

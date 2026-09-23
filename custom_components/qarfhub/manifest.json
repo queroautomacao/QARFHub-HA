@@ -18,7 +18,7 @@
       "deviceType": "urn:schemas-qarfhub-org:device:QARFHub:1"
     }
   ],
-  "version": "2.5.0",
+  "version": "2.5.1",
   "zeroconf": [
     {
       "type": "_espsomfy_rts._tcp.local.",
