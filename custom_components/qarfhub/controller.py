@@ -753,7 +753,7 @@ class ESPSomfyAPI:
 
     async def load_shades(self) -> Any | None:
         """Load all the shades from the controller."""
-        async with self._session.get(f"{self._api_url}{API_SHADES}", headers=self._headers) as resp:
+        async with await self._send("get", f"{self._api_url}{API_SHADES}") as resp:
             if resp.status == 200:
                 self._config["shades"] = await resp.json()
                 return self._config["shades"]
@@ -761,7 +761,7 @@ class ESPSomfyAPI:
 
     async def load_groups(self) -> Any | None:
         """Load all the groups from the controller."""
-        async with self._session.get(f"{self._api_url}{API_GROUPS}", headers=self._headers) as resp:
+        async with await self._send("get", f"{self._api_url}{API_GROUPS}") as resp:
             if resp.status == 200:
                 self._config["groups"] = await resp.json()
                 return self._config["groups"]
@@ -776,7 +776,7 @@ class ESPSomfyAPI:
         """
         url = f"{self._config_url}{API_RFDEVICES}"
         try:
-            async with self._session.get(url, headers=self._headers) as resp:
+            async with await self._send("get", url) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     if isinstance(data, list):
@@ -799,7 +799,7 @@ class ESPSomfyAPI:
         """
         url = f"{self._config_url}{API_RFSEND}?id={int(device_id)}&cmd={cmd}"
         try:
-            async with self._session.post(url, headers=self._headers) as resp:
+            async with await self._send("post", url) as resp:
                 if resp.status == 200:
                     return True
                 _LOGGER.error(
@@ -920,11 +920,24 @@ class ESPSomfyAPI:
 
     async def put_command(self, command, data):
         """Send a put command to the device."""
-        async with self._session.put(f"{self._api_url}{command}", json=data, headers=self._headers) as resp:
+        async with await self._send("put", f"{self._api_url}{command}", json=data) as resp:
             if resp.status == 200:
                 pass
             else:
                 _LOGGER.error(await resp.text())
+
+    async def _send(self, method, url, **kwargs):
+        """Request with the apikey. On 401 log in again and retry once.
+
+        2.5.1: the Hub rotates the key when the PIN/password changes, and every
+        request would fail until Home Assistant restarted.
+        """
+        resp = await self._session.request(method, url, headers=self._headers, **kwargs)
+        if resp.status != 401 or not self._canLogin:
+            return resp
+        resp.release()
+        await self._runtime_login()
+        return await self._session.request(method, url, headers=self._headers, **kwargs)
 
     async def _runtime_login(self):
         """Log in with the credentials saved in the config entry, when the Hub asks for them."""
@@ -968,9 +981,7 @@ class ESPSomfyAPI:
 
     async def group_command(self, data):
         """Send commands to ESPSomfyRTS via PUT request."""
-        async with self._session.put(
-            f"{self._api_url}{API_GROUPCOMMAND}", json=data, headers=self._headers
-        ) as resp:
+        async with await self._send("put", f"{self._api_url}{API_GROUPCOMMAND}", json=data) as resp:
             if resp.status == 200:
                 pass
             else:
@@ -978,9 +989,7 @@ class ESPSomfyAPI:
 
     async def tilt_command(self, data):
         """Send tilt commands to ESPSomfyRTS via PUT request."""
-        async with self._session.put(
-            f"{self._api_url}{API_TILTCOMMAND}", json=data, headers=self._headers
-        ) as resp:
+        async with await self._send("put", f"{self._api_url}{API_TILTCOMMAND}", json=data) as resp:
             if resp.status == 200:
                 pass
             else:
